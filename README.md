@@ -81,16 +81,110 @@ NVR-Monitor-Locale/
 
 ## Controlli Rapidi
 
-* Click Sinistro su una telecamera: Apre la vista a schermo intero con flusso MAIN (Alta Risoluzione / 4K).
-* Click Destro su una telecamera: Apre la vista a schermo intero con flusso SUB (Caricamento rapido).
-* Click su schermata ingrandita con stesso tasto con il quale è stata aperta: Torna alla griglia multi-view.
-* Pulsante TUTTE / STOP: Avvia o arresta contemporaneamente la registrazione su tutte le telecamere configurate.
-* Pulsanti singola camera: Avvia o arresta la registrazione su un singolo canale.
-* Pulsante RICONNETTI: Forza il riallineamento di tutti i flussi live a schermo.
+* **Click Sinistro su una telecamera:** Apre la vista a schermo intero con flusso MAIN (Alta Risoluzione / 4K).
+* **Click Destro su una telecamera:** Apre la vista a schermo intero con flusso SUB (Caricamento rapido).
+* **Click su schermata ingrandita con stesso tasto con il quale è stata aperta:** Torna alla griglia multi-view.
+* **Pulsante TUTTE / STOP:** Avvia o arresta contemporaneamente la registrazione su tutte le telecamere configurate.
+* **Pulsanti singola camera:** Avvia o arresta la registrazione su un singolo canale.
+* **Pulsante RICONNETTI:** Forza il riallineamento di tutti i flussi live a schermo.
 
+---
+
+## ANCORA IN SVILUPPO
+
+---
+
+-------------------------------------- ENG ---------------------------------------------- ENG ----------------------------------------------------------------
+
+# Local NVR Surveillance Monitor (Java Swing + VLCJ + FFmpeg)
 
 THIS PROJECT IS A PROTOTYPE OF A SECURITY CAMERA MANAGEMENT SOFTWARE, NOT MEANT TO BE A PROFESSIONAL ENTERPRISE-LEVEL SOFTWARE OR ANY KIND OF REPLACEMENT TO ALREADY EXISTING COMPANY-LICENSED SOFTWARE.
-THIS PROJECT IS A MAVEN-JAVA-BASED SOFTWARE, USING JAVA17 FOR THE LOGIC AND JAVA-SWING FOR THE GRAPHICS.
-To work properly, the project needs the ffmpeg.exe executable File in the same folder where the pom.xml is located in, such file can be downloaded online, for size reasons it cannot be uploaded directly on here, the file used for this project during development is 98MB heavy.
-The credentials for the Initialization process of the cameras are placed in a file which is called config.properties, on here it's shown a config.exeample.properties as a simplified exeample version just to have an idea on how to configure it.
-STILL WORK IN PROGRESS
+
+A lightweight, modular, and high-performance desktop **NVR (Network Video Recorder)** built with **Java Swing** for real-time monitoring and continuous recording of IP cameras (optimized for Reolink PoE cameras in 16:9, 4:3, and 32:9 ultrawide aspect ratios, as well as generic RTSP/HTTP streams).
+
+## Key Features
+
+* **3-Row Asymmetric Multi-View Layout:** Custom-calibrated grid designed to display cameras with mixed aspect ratios simultaneously without wasted black bars:
+  * **Top Row (28% height):** 2 side-by-side slots (50% / 50%) tailored for 180° panoramic cameras (e.g. 32:9 feeds).
+  * **Middle Row (44% height):** 3 weighted slots (42% / 33% / 25%) combining panoramic, 16:9 and 4:3 feeds.
+  * **Bottom Row (28% height):** 2 side-by-side slots (50% / 50%) for additional panoramic channels.
+* **Live / Recording Decoupling (Minimal CPU Footprint):**
+  * **Live Display:** Uses **VLCJ** (`EmbeddedMediaPlayerComponent`) with native hardware acceleration on low-latency secondary streams (`SUB` stream).
+  * **Disk Recording:** Offloads high-resolution (`MAIN` stream 4K/5K) recording to external **FFmpeg** processes using *stream copy* (`-c copy`), avoiding CPU-heavy video transcoding.
+* **Instant Single-Camera Fullscreen:** Clicking any camera tile switches via `CardLayout` to a dedicated fullscreen player (Left-click for high-res `MAIN` stream, Right-click for fast `SUB` stream).
+* **Segmented Recording & Auto-Watchdog:** Saves video streams into `.mkv` segments (e.g., 30 seconds each) with graceful shutdown (`q` + EOF) and automatic reconnection loops if a camera drops offline.
+* **Externalized Configuration:** Camera IPs, URLs, and credentials are decoupled from the source code via `config.properties`.
+
+---
+
+## System Requirements
+
+* **Java JDK:** Version 17 or higher.
+* **Maven:** For dependency management (`vlcj`).
+* **VLC Media Player (64-bit):** Installed on the host machine (required by `vlcj` for native `libvlc` bindings).
+* **FFmpeg:** The `ffmpeg.exe` binary must be placed in the project root directory (or available in the system `PATH`).
+* **Computational Power:** The application was developed on a laptop based on an AMD Ryzen5 2500U with Radeon Vega Mobile Gfx, 16GB DDR4 2400 MHz, SSD.
+  -
+The application's architecture is optimized to consume very few computational resources thanks to two specific technical choices: hardware video decoding delegated directly to VLCJ via EmbeddedMediaPlayerComponent for live screen display, and saving streams to disk via FFmpeg in stream copy (-c copy) mode, which writes compressed packets without CPU re-encoding.   Based on this real-world workload (simultaneous management of up to 6 channels, with SUB streams displayed on screen and MAIN streams recorded to disk), the hardware requirements are divided into two main tiers:
+* **1. Minimum Requirements (Smooth Basic Operation / Monitoring and Recording Only):**
+* Ideal if the machine is dedicated exclusively to the NVR without running other heavy applications simultaneously:
+* **Processor (CPU):** Quad-Core (4 cores / 4 or 8 threads) of recent or mid-range generation (e.g., 8th–10th Gen Intel Core i3 / i5, AMD Ryzen 3 / Ryzen 5 2000/3000 series, or Intel N100). With this configuration, the application runs stably, leaving less headroom for heavy multitasking.
+* **Graphics Card (GPU / iGPU):** Modern integrated graphics with hardware H.264/H.265 decoding support (e.g., Intel UHD / QuickSync, AMD Radeon Vega). No dedicated graphics card is required.
+* **RAM Memory:** 8 GB (the JVM with Swing, native libvlc buffers, and the 5–6 FFmpeg processes require approximately 1.2 GB to 2 GB of RAM in total).
+* **Storage:** SSD or mechanical HDD with a sustained write speed of at least 10–15 MB/s (the 5–6 streams in stream copy mode generate roughly 4–6 MB/s total disk write throughput).
+* **Network:** Wired Gigabit Ethernet (1000 Mbps) interface connected to the cameras' PoE switch (Wi-Fi should be avoided for continuous RTSP streams).
+---
+* **2. Recommended Requirements (Enhanced Optimal Performance, Heavy Multitasking, and Future Developments):**
+* Ideal for keeping the system under 15–20% CPU usage and ready to host future software digital zoom or a Spring Boot + Svelte web server in the background:
+* **Processor (CPU):** 6 or 8 Cores / 12 or 16 Threads (e.g., AMD Ryzen 5 5500U/6600H/7530U, Ryzen 7 5800H/7730U, or Intel Core i5-1240P / i5-12450H / i5-13420H). Provides ample computing headroom to simultaneously run browsers, containers, or web services without ever slowing down the live feed.
+* **Graphics Card (GPU / iGPU):** Integrated graphics with a latest-generation media engine (Intel Iris Xe / QuickSync or AMD Radeon 660M/680M/Vega) and HDMI 2.0/2.1 video output to smoothly drive Full HD, 2K, or 4K monitors at 60 Hz.
+* **RAM Memory:** 16 GB (or 32 GB if you plan to run virtual machines, Docker, or the future web backend), preferably configured in Dual Channel.
+* **Dual-Drive Storage:**
+* **Primary Drive:** 256/512 GB NVMe SSD for the Operating System and the Java application.
+* **Dedicated Secondary Drive:** A second SSD or Hard Drive dedicated exclusively to the registrazioni/ folder, isolating FFmpeg's continuous 24/7 write cycles from the system drive.
+* **Network:** Wired 1 Gbps or 2.5 Gbps Ethernet port.
+  
+---
+
+## Project Structure
+
+```text
+NVR-Monitor-Locale/
+├── pom.xml                       # Maven dependencies (VLCJ, etc.)
+├── ffmpeg.exe                    # CLI engine for zero-transcode stream recording
+├── config.properties             # Local file with IPs & credentials (ignored by Git)
+├── config.properties.example     # Configuration template
+├── registrazioni/                # Output folder for .mkv recordings (auto-created)
+└── src/main/java/com/
+    ├── Main.java                 # Thread-safe application entry point (Swing EDT)
+    ├── MainViewer.java           # Main UI controller, 3-row grid & control bar
+    ├── SingleCameraPanel.java    # Individual camera tile, SUB player & mouse events
+    ├── VideoRecorder.java        # FFmpeg process manager, segmentation & watchdog
+    └── ConfigManager.java        # Loads external settings from config.properties
+
+```
+
+---
+
+## Configurazione e Avvio
+* **1. Clone the repository**
+* **2. Configure your configuration file and link all the cameras to the devices**
+* **3. Add FFmpeg in the root folder where the pom.xml is**
+* **4. Build and run**
+
+---
+
+## Controls
+* **Left-Click on a camera:** Opens fullscreen view using the MAIN (High-Resolution / 4K) stream.
+* **Right-Click on a camera:** Opens fullscreen view using the SUB (Fast-load) stream.
+* **Click on fullscreen view with the same button used to go fullscreen:** Returns to the multi-camera grid.
+* **Button ALL / STOP button:** Starts or stops recording across all active cameras simultaneously.
+* **Individual camera buttons:** Toggles recording for a specific channel.
+* **Button RECONNECT:** Forces a stream reset and reconnects all live tiles.
+
+
+---
+
+## STILL IN DEVELOPMENT
+
+---
