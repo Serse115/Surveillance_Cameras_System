@@ -161,6 +161,8 @@ NVR-Monitor-Locale/
     ├── SingleCameraPanel.java    # Individual camera tile, SUB player & mouse events
     ├── VideoRecorder.java        # FFmpeg process manager, segmentation & watchdog
     └── ConfigManager.java        # Loads external settings from config.properties
+       ├── BlackSquareIcon.java                               # Icon Component for the recording not running
+       └── RedCircleIcon.java                                 # Icon Component for the recording running
 
 ```
 
