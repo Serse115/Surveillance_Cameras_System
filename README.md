@@ -31,15 +31,15 @@ Un sistema NVR (Network Video Recorder) desktop leggero, modulare e ad alte pres
 L'architettura dell'applicazione è ottimizzata per consumare pochissime risorse computazionali grazie a due scelte tecniche precise: la decodifica video hardware delegata direttamente a VLCJ tramite EmbeddedMediaPlayerComponent per la diretta a schermo e il salvataggio dei flussi su disco tramite FFmpeg in modalità stream copy (-c copy), che scrive i pacchetti compressi senza ricodifica da parte della CPU.
 In base a questo carico di lavoro reale (gestione simultanea fino a 6 canali, con flussi SUB a schermo e flussi MAIN registrati su disco), i requisiti hardware si suddividono su due fasce principali: 
 * **1. Requisiti Minimi (Funzionamento Base Fluido/ Solo Monitoraggio e Registrazione):**
-* *** Ideali se la macchina viene dedicata esclusivamente all'NVR senza eseguire altre applicazioni pesanti in contemporanea:
+* Ideali se la macchina viene dedicata esclusivamente all'NVR senza eseguire altre applicazioni pesanti in contemporanea:
 * **Processore (CPU):** Quad-Core (4 core / 4 o 8 thread) di fascia recente o di media generazione (es. Intel Core i3 / i5 di 8ª-10ª generazione, AMD Ryzen 3 / Ryzen 5 serie 2000/3000, o Intel N100). Con questa configurazione l'applicazione gira stabilmente, lascia meno margine per il multitasking spinto.
 * **Scheda Video (GPU / iGPU):** Grafica integrata moderna con supporto alla decodifica hardware H.264/H.265 (es. Intel UHD / QuickSync, AMD Radeon Vega). Non è richiesta alcuna scheda video dedicata.
 * **Memoria RAM:** 8 GB (la JVM con Swing, i buffer nativi di libvlc e i 5-6 processi FFmpeg richiedono complessivamente tra 1,2 GB e 2 GB di RAM).
 * **Archiviazione (Storage):** SSD o HDD meccanico con una velocità di scrittura costante di almeno 10–15 MB/s (i 5-6 flussi in stream copy generano circa 4–6 MB/s complessivi su disco).
 * **Rete:** Scheda Ethernet Gigabit (1000 Mbps) cablata verso lo switch PoE delle telecamere (da evitare il Wi-Fi per flussi RTSP continui).
-
+---
 * **2. Requisiti Consigliati (Funzionamento Ottimale Potenziato, Multitasking Considerevole e Sviluppi Futuri):**
-* *** Ideali per mantenere il sistema con un utilizzo CPU sotto il 15–20% e pronto per ospitare in futuro lo zoom digitale software o un server web Spring Boot + Svelte in background:
+* Ideali per mantenere il sistema con un utilizzo CPU sotto il 15–20% e pronto per ospitare in futuro lo zoom digitale software o un server web Spring Boot + Svelte in background:
 * **Processore (CPU):** 6 o 8 Core / 12 o 16 Thread (es. AMD Ryzen 5 5500U/6600H/7530U, Ryzen 7 5800H/7730U oppure Intel Core i5-1240P / i5-12450H / i5-13420H). Offre un'ampia riserva di calcolo per eseguire contemporaneamente browser, container o servizi web senza mai rallentare la visualizzazione live.
 * **Scheda Video (GPU / iGPU):** Grafica integrata con motore multimediale di ultima generazione (Intel Iris Xe / QuickSync oppure AMD Radeon 660M/680M/Vega) e uscita video HDMI 2.0/2.1 per gestire fluidamente monitor Full HD, 2K o 4K a 60 Hz.
 * **Memoria RAM:** 16 GB (o 32 GB se si prevede di far girare macchine virtuali, Docker o il futuro backend web), preferibilmente configurata in Dual Channel.
