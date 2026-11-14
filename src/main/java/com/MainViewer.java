@@ -1,7 +1,7 @@
 package com;
 
-import com.GraphicsIcons.BlackSquareIcon;
-import com.GraphicsIcons.RedCircleIcon;
+import com.graphicsIcons.BlackSquareIcon;
+import com.graphicsIcons.RedCircleIcon;
 import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent;
 
 import javax.swing.BorderFactory;
@@ -66,7 +66,6 @@ public class MainViewer {
 
     /* Fields */
     // Constants
-    private final JFrame mainFrame;                         // Finestra principale nativa del sistema operativo
     private final SingleCameraPanel[] cameraPanels;         // Array contenitore per i pannelli delle telecamere attive o configurabili
     private final JPanel bottomBar;                         // Barra comandi posizionata in basso (SOUTH) con controlli, stato e pulsanti REC
     private final CardLayout cardLayout;                    // Gestore del layout per alternare tra la vista a griglia e la vista zoomata singola
@@ -84,7 +83,7 @@ public class MainViewer {
     private final JLabel qualityLabel;                      // Etichetta informativa visualizzata a destra con indicazione della risoluzione/stream attivo
     private final Icon ICON_REC = new RedCircleIcon(15);        // Icona vettoriale: cerchio rosso indicante registrazione non attiva o pronta all'avvio
     private final Icon ICON_STOP = new BlackSquareIcon(15);     // Icona vettoriale: quadrato nero indicante registrazione in corso / pulsante STOP
-    private static final int TOTAL_CAMERAS = 6;             // Numero totale massimo di canali telecamera gestibili dal layout
+    private static final int TOTAL_CAMERAS = Integer.parseInt(ConfigManager.get("cam.number.tot"));   // Numero totale massimo di canali telecamera gestibili dal layout
 
     // Parametri vlcj per lo streaming live: latenza minima e scarto dei frame ritardati
     private static final String[] VLC_LIVE_OPTIONS = {
@@ -98,6 +97,7 @@ public class MainViewer {
     };
 
     // Variables
+    private JFrame mainFrame;                   // Finestra JFrame principale nativa del sistema operativo
     private boolean isSingleViewActive;         // Flag booleano di tracciamento dello stato di visualizzazione singola attivo
 
 
@@ -132,273 +132,89 @@ public class MainViewer {
 
         // 1. CONFIGURAZIONE VINCOLI RIGA 1 (Top: 28% dell'altezza dello schermo)
         GridBagConstraints gbcTop = new GridBagConstraints();
-        gbcTop.gridx = 0;
-        gbcTop.gridy = 0;
-        gbcTop.weightx = 1.0;
-        gbcTop.weighty = 0.28; // 28% dell'altezza verticale totale
-        gbcTop.fill = GridBagConstraints.BOTH;
-        gbcTop.insets = new Insets(0, 0, 2, 0); // Margine inferiore di 2 pixel
-        this.gridPanel.add(this.topRowPanel, gbcTop);
+        this.initializeRow(gbcTop, 0, 0.28, 0, 2);    // Chiamata al metodo privato per inizializzare la Prima Riga
+        this.gridPanel.add(this.topRowPanel, gbcTop);                         // Aggiunta Prima Riga al Panel Grid
 
         // 2. CONFIGURAZIONE VINCOLI RIGA 2 (Middle: 44% dell'altezza dello schermo)
         GridBagConstraints gbcMid = new GridBagConstraints();
-        gbcMid.gridx = 0;
-        gbcMid.gridy = 1;
-        gbcMid.weightx = 1.0;
-        gbcMid.weighty = 0.44; // 44% dell'altezza per favorire i formati 16:9 e 4:3
-        gbcMid.fill = GridBagConstraints.BOTH;
-        gbcMid.insets = new Insets(2, 0, 2, 0); // Margini superiore e inferiore di 2 pixel
-        this.gridPanel.add(this.middleRowPanel, gbcMid);
+        this.initializeRow(gbcMid, 1, 0.44, 2, 2);    // Chiamata al metodo privato per inizializzare la Seconda Riga
+        this.gridPanel.add(this.middleRowPanel, gbcMid);                      // Aggiunta Seconda Riga al Panel Grid
 
         // 3. CONFIGURAZIONE VINCOLI RIGA 3 (Bottom: 28% dell'altezza dello schermo)
         GridBagConstraints gbcBottom = new GridBagConstraints();
-        gbcBottom.gridx = 0;
-        gbcBottom.gridy = 2;
-        gbcBottom.weightx = 1.0;
-        gbcBottom.weighty = 0.28; // 28% dell'altezza verticale totale
-        gbcBottom.fill = GridBagConstraints.BOTH;
-        gbcBottom.insets = new Insets(2, 0, 0, 0); // Margine superiore di 2 pixel
-        this.gridPanel.add(this.bottomRowPanel, gbcBottom);
+        this.initializeRow(gbcBottom, 2, 0.28, 2, 0);    // Chiamata al metodo privato per inizializzare la Terza Riga
+        this.gridPanel.add(this.bottomRowPanel, gbcBottom);                   // Aggiunta Terza Riga al Panel Grid
 
         // --- INIZIALIZZAZIONE DELLA VISTA SINGOLA (ZOOM DEDICATO) ---
         this.singleMediaPlayer = new EmbeddedMediaPlayerComponent();
         this.singleViewPanel = new JPanel(new BorderLayout());
-        this.singleViewPanel.setBackground(Color.BLACK);
-        this.singleViewPanel.add(this.singleMediaPlayer, BorderLayout.CENTER);
-
-        // Aggiunge un listener sulla superficie video del player di zoom:
-        // qualsiasi click (destro o sinistro) chiude la vista zoom e torna alla griglia
-        this.singleMediaPlayer.videoSurfaceComponent().addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (SwingUtilities.isRightMouseButton(e) || SwingUtilities.isLeftMouseButton(e)) {
-                    exitSingleView();
-                }
-            }
-        });
+        this.initializeSingleView(this.singleMediaPlayer, this.singleViewPanel);
 
         // Registrazione delle due schermate nel CardLayout
         this.mainContainerPanel.add(this.gridPanel, "GRID_VIEW");
         this.mainContainerPanel.add(this.singleViewPanel, "SINGLE_VIEW");
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
         // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // --- ISTANZIAZIONE DEI PANNELLI TELECAMERA ---
-        this.cameraPanels = new SingleCameraPanel[TOTAL_CAMERAS];
-
-        // SLOT 0: DUO 2V #1 (Cucina)
-        String cam0Ip = ConfigManager.get("cam.0.ip");
-        if (cam0Ip != null && !cam0Ip.isBlank()) {
-            this.cameraPanels[0] = SingleCameraPanel.createReolink(
-                    ConfigManager.get("cam.0.name"),
-                    cam0Ip,
-                    ConfigManager.get("cam.0.user"),
-                    ConfigManager.get("cam.0.pass"),
-                    this,
-                    isMain -> showSingleView(this.cameraPanels[0], isMain)
-            );
-        }
-
-        // SLOT 1: STREAM SECONDARIO / TELEFONO
-        String cam1Url = ConfigManager.get("cam.1.url");
-        if (cam1Url != null && !cam1Url.isBlank()) {
-            this.cameraPanels[1] = SingleCameraPanel.createSingleStream(
-                    ConfigManager.get("cam.1.name"),
-                    cam1Url,
-                    this,
-                    isMain -> showSingleView(this.cameraPanels[1], false)
-            );
-        }
-
-        // SLOT 2: DUO 2V #3 (Centro Sx - Angolo ad L: al momento non assegnata)
-        this.cameraPanels[2] = null;
-        // SLOT 2: Angolo ad L (Inattivo finché non configurato)
-        //String cam2Ip = ConfigManager.get("cam.2.ip");
-        //if (cam2Ip != null && !cam2Ip.isBlank()) {
-        //    this.cameraPanels[2] = SingleCameraPanel.createReolink(
-        //            ConfigManager.get("cam.2.name"),
-        //            cam2Ip,
-        //            ConfigManager.get("cam.2.user"),
-        //            ConfigManager.get("cam.2.pass"),
-        //            this,
-        //            isMain -> showSingleView(this.cameraPanels[2], isMain)
-        //    );
-        //} else {
-        //    this.cameraPanels[2] = null;
-        //}
-
-        // SLOT 3: RLC-820A (Cameretta)
-        String cam3Ip = ConfigManager.get("cam.3.ip");
-        if (cam3Ip != null && !cam3Ip.isBlank()) {
-            this.cameraPanels[3] = SingleCameraPanel.createReolink(
-                    ConfigManager.get("cam.3.name"),
-                    cam3Ip,
-                    ConfigManager.get("cam.3.user"),
-                    ConfigManager.get("cam.3.pass"),
-                    this,
-                    isMain -> showSingleView(this.cameraPanels[3], isMain)
-            );
-        }
-
-        // SLOT 4: RLC-520A (Portone)
-        String cam4Ip = ConfigManager.get("cam.4.ip");
-        if (cam4Ip != null && !cam4Ip.isBlank()) {
-            this.cameraPanels[4] = SingleCameraPanel.createReolink(
-                    ConfigManager.get("cam.4.name"),
-                    cam4Ip,
-                    ConfigManager.get("cam.4.user"),
-                    ConfigManager.get("cam.4.pass"),
-                    this,
-                    isMain -> showSingleView(this.cameraPanels[4], isMain)
-            );
-        }
-
-        // SLOT 5: Slot ausiliario non assegnato
-        this.cameraPanels[5] = null;
-        // SLOT 5: Angolo ad L (Inattivo finché non configurato)
-        //String cam5Ip = ConfigManager.get("cam.5.ip");
-        //if (cam5Ip != null && !cam5Ip.isBlank()) {
-        //    this.cameraPanels[5] = SingleCameraPanel.createReolink(
-        //            ConfigManager.get("cam.5.name"),
-        //            cam5Ip,
-        //            ConfigManager.get("cam.5.user"),
-        //            ConfigManager.get("cam.5.pass"),
-        //            this,
-        //            isMain -> showSingleView(this.cameraPanels[5], isMain)
-        //    );
-        //} else {
-        //    this.cameraPanels[5] = null;
-        //}
+        this.cameraPanels = new SingleCameraPanel[TOTAL_CAMERAS];           // Numero totale di telecamere prese dal campo costante che legge il valore dal file config.properties
+        this.initializeAllCameras();                                        // Usa il metodo privato per inizializzare tutte le telecamere
         // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // --- DISTRIBUZIONE DEI COMPONENTI NELLE TRE RIGHE ---
+        // 1. POPOLAMENTO RIGA SUPERIORE (Slot 0 e Slot 1 -> Placeholder 1 e 2)
+        this.populateTheRowPanel(0, this.topRowPanel);
 
-        // 1. POPOLAMENTO RIGA SUPERIORE (2 slot da 50% di larghezza ciascuno)
-        if (this.cameraPanels[1] != null) {
-            this.topRowPanel.add(this.cameraPanels[1]);
-        } else {
-            this.topRowPanel.add(this.createPlaceholder(1));
-        }
-        this.topRowPanel.add(this.createPlaceholder(2)); // Secondo slot ultrawide
-
-        // 2. POPOLAMENTO RIGA CENTRALE (pesi orizzontali asimmetrici: 42%, 33%, 25%)
+        // 2. POPOLAMENTO RIGA CENTRALE (Slot 2, 3 e 4 -> Placeholder 3, 4 e 5)
         double[] middleWeights = {0.42, 0.33, 0.25};
-        for (int i = 0; i < 3; i++) {
-            int slotIdx = i + 2; // Copre gli indici 2, 3 e 4 dell'array cameraPanels
-            GridBagConstraints gbc = new GridBagConstraints();
-            gbc.gridx = i;
-            gbc.gridy = 0;
-            gbc.weightx = middleWeights[i]; // Assegna la larghezza percentuale calibrata
-            gbc.weighty = 1.0;             // Occupa l'intera altezza della riga centrale
-            gbc.fill = GridBagConstraints.BOTH;
-            gbc.insets = new Insets(0, (i == 0 ? 0 : 2), 0, (i == 2 ? 0 : 2));
+        this.populateTheCenterRowPanel(middleWeights);
 
-            // Se la telecamera è presente la inserisce, altrimenti genera un placeholder
-            Component comp = (this.cameraPanels[slotIdx] != null)
-                    ? this.cameraPanels[slotIdx]
-                    : this.createPlaceholder(slotIdx + 1);
-            this.middleRowPanel.add(comp, gbc);
-        }
+        // 3. POPOLAMENTO RIGA INFERIORE (Slot 5 e Slot 6 -> Placeholder 6 e 7)
+        this.populateTheRowPanel(5, this.bottomRowPanel);
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-        // 3. POPOLAMENTO RIGA INFERIORE (2 slot da 50% di larghezza ciascuno)
-        if (this.cameraPanels[0] != null) {
-            this.bottomRowPanel.add(this.cameraPanels[0]);
-        } else {
-            this.bottomRowPanel.add(this.createPlaceholder(6));
-        }
-        this.bottomRowPanel.add(this.createPlaceholder(7));
-
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // --- INIZIALIZZAZIONE JFRAME PRINCIPALE ---
-        this.mainFrame = new JFrame("NVR VIDEOSORVEGLIANZA - MONITOR LOCALE");
-        this.mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-        // Massimizza la finestra all'avvio su entrambi gli assi (schermo intero con bordi)
-        this.mainFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
-
-        // Dimensione di fallback nel caso in cui la finestra venga s-massimizzata
-        this.mainFrame.setSize(1380, 720);
-        this.mainFrame.setLocationRelativeTo(null);
+        this.initializeMainFrame();             // Chiamata al metodo d'inizializzazione del Main Frame
 
         // Caricamento dell'icona personalizzata dell'applicazione se presente nei file di risorsa
-        try {
-            ImageIcon logo = new ImageIcon(
-                    Objects.requireNonNull(MainViewer.class.getResource("/Logo_Sorveglianza.jpg"))
-            );
-            this.mainFrame.setIconImage(logo.getImage());
-        } catch (Exception ignored) {
-            // Se l'icona non è presente o il percorso non è valido, prosegue con l'icona di default
-        }
+        this.initializeLogoImg();               // Chiamata al metodo d'inizializzazione del Logo
 
         // --- COSTRUZIONE DELLA BARRA DEI CONTROLLI INFERIORE (BOTTOM BAR) ---
         this.bottomBar = new JPanel(new BorderLayout(8, 0));
-        this.bottomBar.setBorder(new EmptyBorder(4, 8, 4, 8)); // Margini interni di padding
-        this.bottomBar.setBackground(new Color(235, 235, 238)); // Grigio chiaro moderno
+        this.bottomBar.setBorder(new EmptyBorder(4, 8, 4, 8));  // Margini interni di padding
+        this.bottomBar.setBackground(new Color(235, 235, 238));             // Grigio chiaro moderno
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // 1. SEZIONE SINISTRA (WEST): Pulsante di Riconnessione ed Etichetta di Stato
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
         leftPanel.setOpaque(false);
 
         this.reconnectButton = new JButton("RICONNETTI");
-        this.reconnectButton.setFont(new Font("SansSerif", Font.PLAIN, 11));
-        this.reconnectButton.setFocusable(false);
-        this.reconnectButton.setMargin(new Insets(2, 8, 2, 8));
-        this.reconnectButton.addActionListener(e -> {
-            this.statusLabel.setText("STATO: RICONNESSIONE IN CORSO...");
+        this.initializeReconnectButton(this.reconnectButton, this.statusLabel);     // Chiamata al metodo d'inizializzazione del tasto di riconnessione
 
-            // Scorre tutte le telecamere istanziate e riavvia il flusso SUB
-            for (SingleCameraPanel cam : this.cameraPanels) {
-                if (cam != null) {
-                    cam.startSubStream();
-                }
-            }
-            this.statusLabel.setText("STATO: TRASMISSIONE A SCHERMO...");
-        });
-
-        this.statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
-        leftPanel.add(this.reconnectButton);
-        leftPanel.add(new JSeparator(SwingConstants.VERTICAL));
-        leftPanel.add(this.statusLabel);
+        leftPanel.add(this.reconnectButton);                         // Aggiunta del tasto di riconnessione al Left Panel
+        leftPanel.add(new JSeparator(SwingConstants.VERTICAL));      // Aggiunta del separatore verticale al Left Panel
+        leftPanel.add(this.statusLabel);                             // Aggiunta dello Status Label al Left Panel
 
         // 2. SEZIONE CENTRALE (CENTER): Pulsante Master TUTTE e Pulsanti REC di Canale
         JPanel centerRecPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 2));
         centerRecPanel.setOpaque(false);
 
-        this.toggleAllRecordButton = new JButton("TUTTE");
-        this.toggleAllRecordButton.setFont(new Font("SansSerif", Font.BOLD, 11));
-        this.toggleAllRecordButton.setIcon(this.ICON_REC);
-        this.toggleAllRecordButton.setFocusable(false);
-        this.toggleAllRecordButton.setMargin(new Insets(2, 8, 2, 8));
-        this.toggleAllRecordButton.addActionListener(e -> this.toggleAllRecordings());
-        centerRecPanel.add(this.toggleAllRecordButton);
+        this.toggleAllRecordButton = new JButton("TUTTE");          // Tasto per registrare con tutte le telecamere contemporaneamente
+        this.initializeAllRecordButton(this.toggleAllRecordButton);     // Chiamata alla funzione d'inizializzazione del tasto di registrazione contemporanea
+        centerRecPanel.add(this.toggleAllRecordButton);                 // Aggiunta del tasto di registrazione contemporanea al pannello di registrazione
 
         // Separatore verticale tra il pulsante TUTTE e i singoli pulsanti delle telecamere
-        JSeparator sep = new JSeparator(SwingConstants.VERTICAL);
-        sep.setPreferredSize(new Dimension(2, 20));
-        centerRecPanel.add(sep);
+        JSeparator sep = new JSeparator(SwingConstants.VERTICAL);           // Separatore verticale
+        sep.setPreferredSize(new Dimension(2, 20));             // Dimensioni preferite
+        centerRecPanel.add(sep);                                            // Aggiunta del separatore al pannello di registrazione centrale
 
         // Creazione dinamica dei pulsanti di registrazione per ciascun canale
         this.cameraRecordButtons = new JButton[TOTAL_CAMERAS];
-        for (int i = 0; i < TOTAL_CAMERAS; i++) {
-            final int camIndex = i;
-            SingleCameraPanel cam = this.cameraPanels[i];
-
-            JButton btn = new JButton();
-            btn.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            btn.setFocusable(false);
-            btn.setMargin(new Insets(2, 6, 2, 6));
-
-            if (cam != null) {
-                btn.setText(cam.getCameraName());
-                btn.setIcon(this.ICON_REC);
-                btn.setEnabled(true);
-                btn.addActionListener(e -> toggleSingleCameraRecording(camIndex));
-            } else {
-                btn.setText((i + 1) + " - (N.D.)");
-                btn.setEnabled(false); // Disabilita i canali non collegati
-            }
-
-            this.cameraRecordButtons[i] = btn;
-            centerRecPanel.add(btn);
-        }
+        this.initializeRecButtonsForEachCamera(centerRecPanel, this.cameraPanels, this.cameraRecordButtons);    // Chiamata al metodo d'Inizializzazione dei tasti di registrazione per ogni telecamera
 
         // 3. SEZIONE DESTRA (EAST): Indicatore della qualità e del tipo di flusso attivo
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
@@ -407,36 +223,21 @@ public class MainViewer {
         this.qualityLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         this.qualityLabel.setForeground(Color.DARK_GRAY);
         rightPanel.add(this.qualityLabel);
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
+        // -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // Assembla le tre sottosezioni nella barra inferiore
         this.bottomBar.add(leftPanel, BorderLayout.WEST);
         this.bottomBar.add(centerRecPanel, BorderLayout.CENTER);
         this.bottomBar.add(rightPanel, BorderLayout.EAST);
 
         // Assembla i contenitori principali nel frame primario
-        this.mainFrame.setLayout(new BorderLayout());
-        this.mainFrame.add(this.mainContainerPanel, BorderLayout.CENTER);
-        this.mainFrame.add(this.bottomBar, BorderLayout.SOUTH);
-
-        // Registra il listener per la chiusura dell'applicazione con rilascio ordinato delle risorse
-        this.mainFrame.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                // Rilascia le istanze delle telecamere attive arrestando i processi FFmpeg
-                for (SingleCameraPanel cam : cameraPanels) {
-                    if (cam != null) {
-                        cam.release();
-                    }
-                }
-                // Rilascia le risorse native del player vlcj dello zoom
-                singleMediaPlayer.release();
-
-                // Termina il processo della Virtual Machine Java
-                System.exit(0);
-            }
-        });
+        this.finalizeTheMain(this.mainFrame);
     }
 
+
+
+    /* Methods */
     // CreatePlaceHolder method per generare il pannello placeholder per gli slot ancora da inizializzare
     /**
      * Genera un pannello segnaposto (placeholder) per gli slot privi di telecamera.
@@ -460,6 +261,7 @@ public class MainViewer {
 
         return placeHolder;
     }
+
 
     // ShowSingleView method per attivare la modalità Visione singola con la versione SUB o MAIN
     /**
@@ -485,6 +287,7 @@ public class MainViewer {
         this.updateStreamStatusAndQualityLabel(labelText);                              // Aggiorna l'etichetta grafica della barra inferiore
     }
 
+
     // ExitSingleView method per uscire dalla modalità schermo intero e tornare alla modalità a griglia con le altre telecamere
     /**
      * Chiude la visualizzazione a tutto schermo e ripristina la visualizzazione a griglia.
@@ -501,6 +304,7 @@ public class MainViewer {
         this.cardLayout.show(this.mainContainerPanel, "GRID_VIEW");     // Riporta il CardLayout sulla schermata a mosaico principale
         this.updateStreamStatusAndQualityLabel("SUB (640x480)");     // Ripristina l'indicazione dello stream predefinito per la modalità griglia
     }
+
 
     // ToggleSingleCameraRecording method per iniziare la registrazione su una singola telecamera
     /**
@@ -650,6 +454,322 @@ public class MainViewer {
         // Esegue l'assegnazione sull'EDT per preservare la consistenza grafica dell'interfaccia
         SwingUtilities.invokeLater(() -> this.qualityLabel.setText("Stream: " + cleanText));
     }
+
+    // InitializeReolinkCamera method per inizializzare una telecamera quando essa è di tipo Reolink
+    /**
+     * Permette d'inizializzare una telecamera di tipo Reolink tramite i dati presenti nel config.properties
+     * e la assegna direttamente allo slot corrispondente nell'array cameraPanels.
+     *
+     * @param camIndex   Indice dello slot nell'array cameraPanels da popolare.
+     * @param cameraIp   Valore dell'IP letto dal file config.properties.
+     * @param cameraName Nome affidato alla telecamera in questione per identificarla.
+     * @param cameraUser User della telecamera in questione.
+     * @param cameraPass Password della telecamera in questione per identificarla.
+     */
+    private void initializeReolinkCamera(int camIndex, String cameraIp, String cameraName, String cameraUser, String cameraPass) {
+        if (cameraIp != null && !cameraIp.isBlank()) {
+            this.cameraPanels[camIndex] = SingleCameraPanel.createReolink(
+                    cameraName,
+                    cameraIp,
+                    cameraUser,
+                    cameraPass,
+                    this,
+                    isMain -> showSingleView(this.cameraPanels[camIndex], isMain)
+            );
+        }
+    }
+
+    // InitializeDefaultCamera method per inizializzare una telecamera quando essa è di altro tipo
+    /**
+     * Permette d'inizializzare una telecamera a flusso singolo (es. HTTP/Telefono) tramite i dati
+     * presenti nel config.properties e la assegna direttamente allo slot corrispondente nell'array cameraPanels.
+     *
+     * @param camIndex   Indice dello slot nell'array cameraPanels da popolare.
+     * @param cameraURL  URL dello stream letto dal file config.properties.
+     * @param cameraName Nome affidato alla telecamera in questione per identificarla.
+     */
+    private void initializeDefaultCamera(int camIndex, String cameraURL, String cameraName) {
+        if (cameraURL != null && !cameraURL.isBlank()) {
+            this.cameraPanels[camIndex] = SingleCameraPanel.createSingleStream(
+                    cameraName,
+                    cameraURL,
+                    this,
+                    isMain -> showSingleView(this.cameraPanels[camIndex], false)
+            );
+        }
+    }
+
+    // InitializeMainFrame method per finalizzare il main frame
+    /**
+     * Permette di finalizzare il main frame per la visualizzazione finale.
+     * Setta la default close operation, lo stato della finestra, la sua dimensione e posizione.
+     */
+    private void initializeMainFrame() {
+
+        // --- INIZIALIZZAZIONE JFRAME PRINCIPALE ---
+        this.mainFrame = new JFrame("NVR VIDEOSORVEGLIANZA - MONITOR LOCALE");
+        this.mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+        // Massimizza la finestra all'avvio su entrambi gli assi (schermo intero con bordi)
+        this.mainFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+
+        // Dimensione di fallback nel caso in cui la finestra venga s-massimizzata
+        this.mainFrame.setSize(1380, 720);
+        this.mainFrame.setLocationRelativeTo(null);
+    }
+
+    // InitializeLogoImg method per finalizzare il logo del main frame
+    /**
+     * Permette d'inizializzare il logo del main frame per la visualizzazione finale.
+     * L'immagine per il logo è hard-coded per convenienza, se non è presente, viene usata l'icona di default di java.
+     */
+    private void initializeLogoImg() {
+
+        // Caricamento dell'icona personalizzata dell'applicazione se presente nei file di risorsa
+        try {
+            ImageIcon logo = new ImageIcon(
+                    Objects.requireNonNull(MainViewer.class.getResource("/Logo_Sorveglianza.jpg"))
+            );
+            this.mainFrame.setIconImage(logo.getImage());
+        }
+        catch (Exception ignored) {
+            // Se l'icona non è presente o il percorso non è valido, prosegue con l'icona di default di java
+        }
+    }
+
+    // InitializeAllCameras method per inizializzare tutte le telecamere una per una
+    /**
+     * Permette d'inizializzare tutte le telecamere una per una con i dati nel config.properties per la visualizzazione finale.
+     * Distingue tra le telecamere di tipo Reolink oppure quelle di altro tipo, ignorando in sicurezza gli slot vuoti.
+     */
+    private void initializeAllCameras() {
+        for (int i = 0; i < TOTAL_CAMERAS; i++) {
+            final String typeVal = ConfigManager.get("cam." + i + ".cameraType");       // Valore del Type della telecamera
+            final String ipVal   = ConfigManager.get("cam." + i + ".ip");               // Valore dell'IP assegnato alla telecamera
+            final String nameVal = ConfigManager.get("cam." + i + ".name");             // Valore del name assegnato alla telecamera
+            final String userVal = ConfigManager.get("cam." + i + ".user");             // Valore dell'user della telecamera
+            final String passVal = ConfigManager.get("cam." + i + ".pass");             // Valore della Password della telecamera
+            final String urlVal  = ConfigManager.get("cam." + i + ".url");              // Valore dell'URL della telecamera per intercettare il suo flusso di dati
+
+            // Se lo slot non ha un tipo configurato nel file properties, lo lascia a null
+            if (typeVal == null || typeVal.isBlank()) {
+                this.cameraPanels[i] = null;
+                continue;
+            }
+
+            if ("Reolink".equalsIgnoreCase(typeVal.trim())) {                       // Se la telecamera è di tipo Reolink
+                this.initializeReolinkCamera(i, ipVal, nameVal, userVal, passVal);  // Usa il metodo d'inizializzazione della telecamera Reolink
+            }
+            else {                                                                  // Altrimenti se è di altro tipo
+                this.initializeDefaultCamera(i, urlVal, nameVal);                   // Usa il metodo d'inizializzazione di default
+            }
+        }
+    }
+
+    // InitializeRow method per inizializzare una riga del pannello di visione delle telecamere
+    /**
+     * Permette d'inizializzare la riga del pannello con parametri pre-scelti per la visualizzazione finale.
+     * @param gbc Istanza della riga GridBagConstraints da inizializzare con i dati
+     * @param gridy Istanza che indica il numero della riga verticale per identificare dove si posiziona tale riga
+     * @param weighty Istanza che indica la percentuale dell'altezza verticale della riga scelta
+     * @param top Istanza che indica la distanza dal bordo in cima
+     * @param bottom Istanza che indica la distanza dal bordo sul fondo
+     */
+    private void initializeRow(GridBagConstraints gbc, int gridy, double weighty, int top, int bottom) {
+
+        gbc.gridx = 0;                                              // Numero riga orizzontale scelta
+        gbc.gridy = gridy;                                          // Numero riga verticale scelta
+        gbc.weightx = 1.0;                                          // 100% della larghezza orizzontale totale
+        gbc.weighty = weighty;                                      // % dell'altezza verticale totale
+        gbc.fill = GridBagConstraints.BOTH;                         // Per tutti quindi di default
+        gbc.insets = new Insets(top, 0, bottom, 0);       // Margine inferiore con parametri
+    }
+
+    // InitializeSingleView method per inizializzare il pannello e il player dedicati alla vista singola (zoom)
+    /**
+     * Configura il pannello per la visualizzazione a schermo intero di una singola telecamera
+     * e imposta il listener del mouse per tornare alla griglia principale al click.
+     *
+     * @param singleMediaPlayer Componente media player vlcj dedicato alla riproduzione del flusso ingrandito
+     * @param singleViewPanel   Pannello contenitore Swing che ospita il player della vista singola
+     */
+    private void initializeSingleView(EmbeddedMediaPlayerComponent singleMediaPlayer, JPanel singleViewPanel) {
+
+        // --- INIZIALIZZAZIONE DELLA VISTA SINGOLA (ZOOM DEDICATO) ---
+        singleViewPanel.setBackground(Color.BLACK);                     // Colore di Background nero
+        singleViewPanel.add(singleMediaPlayer, BorderLayout.CENTER);    // Aggiunta del Componente Media Player al Componente JPanel
+
+        // Aggiunge un listener sulla superficie video del player di zoom:
+        // qualsiasi click (destro o sinistro) chiude la vista zoom e torna alla griglia
+        singleMediaPlayer.videoSurfaceComponent().addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e) || SwingUtilities.isLeftMouseButton(e)) {
+                    exitSingleView();
+                }
+            }
+        });
+    }
+
+    // InitializeReconnectButton method per configurare il pulsante di riconnessione manuale dei flussi
+    /**
+     * Inizializza l'aspetto grafico e il comportamento del pulsante di riconnessione,
+     * permettendo il riavvio manuale dello stream SUB su tutte le telecamere attive.
+     *
+     * @param reconnectButton Istanza del pulsante Swing dedicato alla riconnessione
+     * @param statusLabel     Etichetta di testo della barra inferiore da aggiornare con lo stato dell'operazione
+     */
+    private void initializeReconnectButton(JButton reconnectButton, JLabel statusLabel) {
+
+        reconnectButton.setFont(new Font("SansSerif", Font.PLAIN, 11));     // Setting il font del tasto
+        reconnectButton.setFocusable(false);                                          // Focusable false per disattivare effetti grafici
+        reconnectButton.setMargin(new Insets(2, 8, 2, 8));       // Settaggio dei margini Insets
+        reconnectButton.addActionListener(e -> {                                      // Aggiunta dell'action listener per il tasto
+            statusLabel.setText("STATO: RICONNESSIONE IN CORSO...");                  // Set text per per lo status label
+
+            // Scorre tutte le telecamere istanziate e riavvia il flusso SUB
+            for (SingleCameraPanel cam : this.cameraPanels) {
+                if (cam != null) {
+                    cam.startSubStream();
+                }
+            }
+            statusLabel.setText("STATO: TRASMISSIONE A SCHERMO...");
+        });
+        this.statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+    }
+
+    // InitializeAllRecordButton method per configurare il pulsante master di registrazione globale
+    /**
+     * Inizializza lo stile grafico, l'icona e l'azione del pulsante master ("TUTTE")
+     * utilizzato per avviare o arrestare simultaneamente la registrazione su tutti i canali.
+     *
+     * @param toggleAllRecordButton Istanza del pulsante Swing per il controllo globale delle registrazioni
+     */
+    private void initializeAllRecordButton(JButton toggleAllRecordButton) {
+
+        toggleAllRecordButton.setFont(new Font("SansSerif", Font.BOLD, 11));
+        toggleAllRecordButton.setIcon(this.ICON_REC);
+        toggleAllRecordButton.setFocusable(false);
+        toggleAllRecordButton.setMargin(new Insets(2, 8, 2, 8));
+        toggleAllRecordButton.addActionListener(e -> this.toggleAllRecordings());
+    }
+
+    // InitializeRecButtonsForEachCamera method per generare i pulsanti di registrazione delle singole telecamere
+    /**
+     * Crea, configura e aggiunge alla barra inferiore i pulsanti di registrazione individuali
+     * per ciascuna telecamera, disabilitando quelli relativi agli slot non collegati.
+     *
+     * @param centerRecPanel      Pannello centrale della bottom bar in cui inserire i pulsanti generati
+     * @param cameraPanels        Array contenente le istanze dei pannelli delle telecamere configurate
+     * @param cameraRecordButtons Array dei pulsanti di registrazione da popolare e associare ai rispettivi canali
+     */
+    private void initializeRecButtonsForEachCamera(JPanel centerRecPanel, SingleCameraPanel[] cameraPanels, JButton[] cameraRecordButtons) {
+
+        for (int i = 0; i < TOTAL_CAMERAS; i++) {
+            final int camIndex = i;
+            SingleCameraPanel cam = cameraPanels[i];
+
+            JButton btn = new JButton();
+            btn.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            btn.setFocusable(false);
+            btn.setMargin(new Insets(2, 6, 2, 6));
+
+            if (cam != null) {
+                btn.setText(cam.getCameraName());
+                btn.setIcon(this.ICON_REC);
+                btn.setEnabled(true);
+                btn.addActionListener(e -> toggleSingleCameraRecording(camIndex));
+            } else {
+                btn.setText((i + 1) + " - (N.D.)");
+                btn.setEnabled(false); // Disabilita i canali non collegati
+            }
+
+            cameraRecordButtons[i] = btn;
+            centerRecPanel.add(btn);
+        }
+    }
+
+    // FinalizeTheMain method per assemblare i componenti nel JFrame e gestire la chiusura dell'applicazione
+    /**
+     * Completa la configurazione del frame principale assemblando il pannello video e la barra inferiore,
+     * e registra il listener di chiusura per rilasciare in modo pulito i processi FFmpeg e le risorse vlcj.
+     *
+     * @param mainFrame Finestra principale JFrame dell'applicazione da finalizzare
+     */
+    private void finalizeTheMain(JFrame mainFrame) {
+
+        mainFrame.setLayout(new BorderLayout());                        // Settaggio Layout
+        mainFrame.add(this.mainContainerPanel, BorderLayout.CENTER);    // Aggiunta del Main Container Panel al centro
+        mainFrame.add(this.bottomBar, BorderLayout.SOUTH);              // Aggiunta del Bottom Bar in basso
+
+        // Registra il listener per la chiusura dell'applicazione con rilascio ordinato delle risorse
+        mainFrame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                // Nasconde immediatamente la finestra per un feedback istantaneo all'utente
+                mainFrame.setVisible(false);
+
+                // Esegue il rilascio su un thread separato per non bloccare l'EDT
+                new Thread(() -> {
+                    for (SingleCameraPanel cam : cameraPanels) {
+                        if (cam != null) {
+                            cam.release();
+                        }
+                    }
+                    singleMediaPlayer.release();
+                    System.exit(0);
+                }).start();
+            }
+        });
+    }
+
+    // PopulateTheRowPanel method per popolare una riga panoramica (2 slot) in modo sequenziale
+    /**
+     * Popola una riga panoramica da 2 slot (superiore o inferiore) controllando due indici consecutivi
+     * dell'array cameraPanels a partire da startIndex. Se una telecamera è presente la aggiunge,
+     * altrimenti inserisce il rispettivo placeholder numerato (slotIdx + 1).
+     *
+     * @param startIndex Indice di partenza nell'array cameraPanels (es. 0 per topRow, 5 per bottomRow)
+     * @param rowPanel   Pannello della riga (topRowPanel o bottomRowPanel) da popolare
+     */
+    private void populateTheRowPanel(int startIndex, JPanel rowPanel) {
+        for (int i = 0; i < 2; i++) {
+            int slotIdx = startIndex + i;
+            if (slotIdx < TOTAL_CAMERAS && this.cameraPanels[slotIdx] != null) {
+                rowPanel.add(this.cameraPanels[slotIdx]);
+            } else {
+                rowPanel.add(this.createPlaceholder(slotIdx + 1));
+            }
+        }
+    }
+
+    // PopulateTheCenterRowPanel method per popolare la riga centrale con pesi orizzontali asimmetrici
+    /**
+     * Popola la riga centrale della griglia applicando i pesi percentuali di larghezza
+     * per adattare i diversi formati video (32:9, 16:9 e 4:3) senza bande nere.
+     *
+     * @param middleWeights Array di valori decimali che definisce la percentuale di larghezza per ciascuna delle 3 colonne
+     */
+    private void populateTheCenterRowPanel(double[] middleWeights) {
+
+        for (int i = 0; i < 3; i++) {
+            int slotIdx = i + 2;                                // Copre gli indici 2, 3 e 4 dell'array cameraPanels
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.gridx = i;
+            gbc.gridy = 0;
+            gbc.weightx = middleWeights[i];                     // Assegna la larghezza percentuale calibrata
+            gbc.weighty = 1.0;                                  // Occupa l'intera altezza della riga centrale
+            gbc.fill = GridBagConstraints.BOTH;
+            gbc.insets = new Insets(0, (i == 0 ? 0 : 2), 0, (i == 2 ? 0 : 2));
+
+            // Se la telecamera è presente la inserisce, altrimenti genera un placeholder
+            Component comp = (this.cameraPanels[slotIdx] != null)
+                    ? this.cameraPanels[slotIdx]
+                    : this.createPlaceholder(slotIdx + 1);
+            this.middleRowPanel.add(comp, gbc);
+        }
+    }
+
 }
 
 /*
@@ -678,4 +798,4 @@ public class MainViewer {
  * 4. Unified Control of the registration:
  *    - Dedicated buttons for each camera and a master button for all of them: to start or stop the recording process
  *     of FFMPEG through an asynchronous notification.
- */
+ * */
